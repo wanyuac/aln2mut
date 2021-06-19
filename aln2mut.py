@@ -3,7 +3,7 @@
 This script identifies and reports mutations from a FASTA-format sequence alignment.
 
 Example command:
-    python aln2mut.py -i samples.aln -o samples -d ./var -r reference
+    python aln2mut.py -i samples.aln -o samples -d var -r reference
 
 Dependencies: Python 3, pandas
 
@@ -33,10 +33,12 @@ def main():
     ref_name = args.ref
     validate_params(ref_name, aln, args.dir)  # The script exists when this validation fails.
     ref = aln[ref_name]  # The reference sequence (may contain '-' when insertions are present in sample sequences)
+    print("Length of the reference sequence: %i" % (len(ref) - ref.count('-')), file = sys.stderr)  # The sequence length does not count the size of gaps.
     aln = {key : value for key, value in aln.items() if key != ref_name}  # Take a subset of the dictionary aln
-    n = len(ref)  # In the alignment file, very sequence (including '-') must have the same length.
-    vcf = aln2vcf(ref, aln, n)  # Create a VCF-like table (pandas data frame) of six columns: Sample, Pos, Ref, Alt, Type (of mutation), Aux_pos
-    vcf.to_csv(os.path.join(args.dir, args.output + ".tsv"), index = False, sep = '\t')
+    vcf = aln2vcf(ref, aln)  # Create a VCF-like table (pandas data frame) of six columns: Sample, Pos, Ref, Alt, Type (of mutation), Aux_pos
+    vcf.to_csv(os.path.join(args.dir, args.output + ".vcf"), index = False, sep = '\t')
+    mat = vcf2mat(vcf = vcf, ref = ref, all_samples = list(aln.keys()))  # Convert a VCF data frame into a matrix of alterations (sample x variant positions) that can be aligned to a phylogenetic tree
+    mat.to_csv(os.path.join(args.dir, args.output + ".tsv"), index = False, sep = '\t')
     return
 
 
@@ -77,19 +79,20 @@ def validate_params(ref, aln, outdir):
     return
 
 
-def aln2vcf(ref, aln, n):
+def aln2vcf(ref, aln):
     """
     Mutation calling: to create a VCF-like table of five columns: Sample, Pos, Ref, Alt, Type (of mutation)
     Code for alteration types: S (substitution), I (insertion to the reference), D (deletion from the reference)
     This function implements the core algorithm of this script.
     """
+    n = len(ref)  # In the alignment file, very sequence (including '-') must have the same length.
     samples = list()
     coords = list()  # Positions in the reference sequence
     aux_coords = list()  # Auxiliary positions (real numbers) for sorting the output VCF file based on positions
     refs = list()  # Bases/amino acids (AAs) in the reference sequence
     alts = list()  # Alternative bases/AAs in the sample sequence
     types = list()  # Types of alterations
-    for sam, seq in aln.items():
+    for sam, seq in aln.items():  # Of note, a sample does not appear in the VCF if it is identical to the reference.
         p = 0  # A pointer for the current character in the reference sequence, excluding '-' characters. (real position - 1)
         ins = False  # A flag for whether the current position is in an insertion ('-' characters in the reference sequence)
         ins_up = 0  # Immediately upstream position of an insertion; Variables ins_up and p mark the flanking positions of the current insertion.
@@ -145,6 +148,11 @@ def aln2vcf(ref, aln, n):
             ins_seq = ''
     return pandas.DataFrame({'Sample' : samples, 'Pos' : coords, 'Ref' : refs, 'Alt' : alts, 'Type' : types, 'Aux_pos' : aux_coords})
 
+
+def vcf2mat(vcf, ref, all_samples):
+    """ Convert a VCF data frame into a matrix of alterations (sample x variant positions) """
+    mat = None
+    return mat
 
 if __name__ == '__main__':
     main()

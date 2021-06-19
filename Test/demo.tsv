@@ -1,0 +1,15 @@
+Sample	Pos	Ref	Alt	Type	Aux_pos
+sample_1	1	A	-	D	1.0
+sample_1	2	T	-	D	2.0
+sample_1	3	G	-	D	3.0
+sample_1	5	C	T	S	5.0
+sample_1	16	A	G	S	16.0
+sample_2	16	A	G	S	16.0
+sample_2	20	G	A	S	20.0
+sample_3	9^10	-	GATCCC	I	9.5
+sample_4	9^10	-	CTG	I	9.5
+sample_4	14	T	C	S	14.0
+sample_5	13	A	-	D	13.0
+sample_5	14	T	-	D	14.0
+sample_5	21	A	G	S	21.0
+sample_5	21^	-	TAG	I	21.5
