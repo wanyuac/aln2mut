@@ -35,7 +35,8 @@ def main():
     ref = aln[ref_name]  # The reference sequence (may contain '-' when insertions are present in sample sequences)
     aln = {key : value for key, value in aln.items() if key != ref_name}  # Take a subset of the dictionary aln
     n = len(ref)  # In the alignment file, very sequence (including '-') must have the same length.
-    vcf = aln2vcf(ref, aln, n)  # Create a VCF-like table (pandas data frame) of five columns: Sample, Pos, Ref, Alt, Type (of mutation)
+    vcf = aln2vcf(ref, aln, n)  # Create a VCF-like table (pandas data frame) of six columns: Sample, Pos, Ref, Alt, Type (of mutation), Aux_pos
+    vcf.to_csv(os.path.join(args.dir, args.output + ".tsv"), index = False, sep = '\t')
     return
 
 
@@ -84,6 +85,7 @@ def aln2vcf(ref, aln, n):
     """
     samples = list()
     coords = list()  # Positions in the reference sequence
+    aux_coords = list()  # Auxiliary positions (real numbers) for sorting the output VCF file based on positions
     refs = list()  # Bases/amino acids (AAs) in the reference sequence
     alts = list()  # Alternative bases/AAs in the sample sequence
     types = list()  # Types of alterations
@@ -100,7 +102,8 @@ def aln2vcf(ref, aln, n):
                     p += 1
                     if ins:  # The pointer reaches the end of an insertion.
                         samples.append(sam)
-                        coords.append('%i^%i' % (ins_up, p))  # E.g., '25^36' means an insertion between positions 25 and 26.
+                        coords.append('%i^%i' % (ins_up, p))  # E.g., '25^36' means an insertion between positions 25 and 26. ins_up equals zero when the insertion happens before the start codon of the reference sequence.
+                        aux_coords.append(ins_up + 0.5)  # The extra 0.5 marks the insertion site between two consecutive positions.
                         refs.append('-')
                         alts.append(ins_seq)
                         types.append('I')
@@ -112,6 +115,7 @@ def aln2vcf(ref, aln, n):
                     p += 1
                     if ins:  # Now the insertion region ends
                         coords.append('%i^%i' % (ins_up, p))
+                        aux_coords.append(ins_up + 0.5)
                         refs.append('-')
                         alts.append(ins_seq)
                         types.append('I')
@@ -119,6 +123,7 @@ def aln2vcf(ref, aln, n):
                         ins_seq = ''
                     else:  # Substitution or deletion
                         coords.append(p)
+                        aux_coords.append(p)
                         refs.append(r)
                         alts.append(s)
                         types.append('D' if s == '-' else 'S')
@@ -127,17 +132,18 @@ def aln2vcf(ref, aln, n):
                         ins_seq += s
                     else:  # At the start of an insertion: start to record the current insertion.
                         ins = True
-                        ins_up = p  # Record where the insertion starts The extra 0.5 marks the insertion site between two consecutive positions. In some cases, ins_up can equal zero.
+                        ins_up = p  # Record where the insertion starts
                         ins_seq = s  # Start to record the current insertion region
         if ins:  # Finish the insertion that happens at the end of the reference sequence
             samples.append(sam)
             coords.append(str(ins_up) + '^')
+            aux_coords.append(ins_up + 0.5)
             refs.append('-')
             alts.append(ins_seq)
             types.append('I')
             ins = False
             ins_seq = ''
-    return pandas.DataFrame({'Sample' : samples, 'Pos' : coords, 'Ref' : refs, 'Alt' : alts, 'Type' : types})
+    return pandas.DataFrame({'Sample' : samples, 'Pos' : coords, 'Ref' : refs, 'Alt' : alts, 'Type' : types, 'Aux_pos' : aux_coords})
 
 
 if __name__ == '__main__':
