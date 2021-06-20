@@ -3,11 +3,12 @@
 This script identifies and reports mutations from a FASTA-format sequence alignment.
 
 Example command:
-    python aln2mut.py -i samples.aln -o samples -d var -r reference
+    python aln2mut.py -i samples.aln -o samples -d var -r reference -l
 
 Output files:
     [output prefix]_var.tsv: a VCF-like tab-delimited file listing alterations
     [output prefix]_mat.tsv: a matrix of alterations (sample-by-variant positions)
+    [output prefix]_lst.tsv (optional): a list of alteration in a conventional format (e.g. W25N, 36-38del)
 
 Dependencies: Python 3, pandas
 
@@ -28,6 +29,7 @@ def parse_argument():
     parser.add_argument('-o', '--output', dest = 'output', type = str, required = True, help = "Prefix for output files")
     parser.add_argument('-d', '--dir', dest = 'dir', type = str, required = False, default = '.', help = "Output directory")
     parser.add_argument('-r', '--ref', dest = 'ref', type = str, required = True, help = "Name of the reference sequence in the alignment")
+    parser.add_argument('-l', '--list', dest = 'list', action = 'store_true', help = "Create a list of alterations in a conventional format (e.g., W25N)")
     return parser.parse_args()
 
 
@@ -39,9 +41,12 @@ def main():
     print("Info: Length of the reference sequence: %i" % (len(ref) - ref.count('-')), file = sys.stderr)  # The sequence length does not count the size of gaps.
     aln = {key : value for key, value in aln.items() if key != ref_name}  # Take a subset of the dictionary aln
     vcf = aln2vcf(ref, aln)  # Create a VCF-like table (pandas data frame) of six columns: Sample, Pos, Ref, Alt, Type (of mutation), Aux_pos
-    vcf.to_csv(os.path.join(args.dir, args.output + "_var.tsv"), index = False, sep = '\t')  # This table can be read into Python using pandas.read_csv('XXXX.vcf', sep = '\t').
-    mat = vcf2mat(vcf, ref_gap_free, ref_name, list(aln.keys()))  # Convert a VCF data frame into a matrix of alterations (sample x variant positions) that can be aligned to a phylogenetic tree
-    mat.to_csv(os.path.join(args.dir, args.output + "_mat.tsv"), index = False, sep = '\t')
+    vcf.to_csv(os.path.join(args.dir, args.output + '_var.tsv'), index = False, sep = '\t')  # This table can be read into Python using pandas.read_csv('XXXX.vcf', sep = '\t').
+    mat, vcf_samples = vcf2mat(vcf, ref_gap_free, ref_name, list(aln.keys()))  # Convert a VCF data frame into a matrix of alterations (sample x variant positions) that can be aligned to a phylogenetic tree
+    mat.to_csv(os.path.join(args.dir, args.output + '_mat.tsv'), index = False, sep = '\t')
+    if args.list:
+        lst = vcf2lst(vcf, vcf_samples)
+        lst.to_csv(os.path.join(args.dir, args.output + '_lst.tsv'), index = False, sep = '\t')
     return
 
 
@@ -135,7 +140,7 @@ def aln2vcf(ref, aln):
                         ins = False
                         ins_seq = ''
                     else:  # Substitution or deletion
-                        coords.append(p)
+                        coords.append(str(p))
                         aux_coords.append(p)
                         refs.append(r)
                         alts.append(s)
@@ -184,7 +189,7 @@ def vcf2mat(vcf, ref_gap_free, ref_name, all_samples):
             print("Info: sequence " + sam + " is identical to the reference sequence.", file = sys.stderr)
             new_row += ['.'] * n
         mat = mat.append(pandas.Series(new_row, index = mat.columns), ignore_index = True)  # Append a row to mat
-    return mat
+    return mat, vcf_samples
 
 
 def get_ref_row(ref_gap_free, coords):
@@ -203,6 +208,24 @@ def get_ref_row(ref_gap_free, coords):
         else:
             ref_chars += ['-']
     return(ref_chars)
+
+
+def vcf2lst(vcf, vcf_samples):
+    """ Convert the VCF into a list of alterations """
+    lst = pandas.DataFrame(columns = ['Sample', 'Alteration'])
+    for sam in vcf_samples:
+        vcf_sam = vcf.loc[vcf['Sample'] == sam]
+        alt = list()
+        for _, row in vcf_sam.iterrows():
+            t = row['Type']
+            if t == 'S':
+                alt.append(row['Ref'] + row['Pos'] + row['Alt'])  # E.g. V80F
+            elif t == 'I':
+                alt.append(row['Pos'].replace('^', 'ins' + row['Alt']))  # E.g. 10insATRQ11 (The prefix 'ins' seems redundant here, but it can be used as a keyword by users for quickly identifying insertions)
+            else:  # t == 'D'
+                alt.append(row['Ref'] + row['Pos'] + 'del')  # E.g. R80del. Users may want to manually merge consecutive deletions into a single one.
+        lst = lst.append(pandas.Series([sam, ','.join(alt)], index = lst.columns), ignore_index = True)  # Sample name'\t'A comma-delimited list of alterations
+    return lst
 
 
 if __name__ == '__main__':

@@ -1,0 +1,6 @@
+Sample	Alteration
+sample_1	A1del,T2del,G3del,C5T,A16G
+sample_2	insATA1,A16G,G20A
+sample_3	9insGATCCC10
+sample_4	9insCTG10,T14C
+sample_5	A13del,T14del,A21G,21insTAG
