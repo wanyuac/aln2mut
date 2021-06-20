@@ -1,0 +1,7 @@
+Sample	^1	1	2	3	5	9^10	13	14	16	20	21	21^
+reference	-	A	T	G	C	-	A	T	A	G	A	-
+sample_1	.	-	-	-	T	.	.	.	G	.	.	.
+sample_2	ATA	.	.	.	.	.	.	.	G	A	.	.
+sample_3	.	.	.	.	.	GATCCC	.	.	.	.	.	.
+sample_4	.	.	.	.	.	CTG	.	C	.	.	.	.
+sample_5	.	.	.	.	.	.	-	-	.	.	G	TAG

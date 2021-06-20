@@ -3,6 +3,6 @@
 Test command
 
 ```bash
-python aln2mut.py -i Test/demo.aln -o demo_user -d Test -r reference
+python aln2mut.py -i test/demo.aln -o demo -d test -r reference
 ```
 
