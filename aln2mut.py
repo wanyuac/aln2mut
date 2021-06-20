@@ -3,12 +3,13 @@
 This script identifies and reports mutations from a FASTA-format sequence alignment.
 
 Example command:
-    python aln2mut.py -i samples.aln -o samples -d var -r reference -l
+    python aln2mut.py -i samples.aln -o samples -d var -r reference -l -v
 
 Output files:
-    [output prefix]_var.tsv: a VCF-like tab-delimited file listing alterations
+    [output prefix]_vcf.tsv: a VCF-like tab-delimited file listing alterations
     [output prefix]_mat.tsv: a matrix of alterations (sample-by-variant positions)
     [output prefix]_lst.tsv (optional): a list of alteration in a conventional format (e.g. W25N, 36-38del)
+    [output prefix]_var.aln (optional): a FASTA file of variable sites in the input alignment (similar to the output of software snp-sites)
 
 Dependencies: Python 3, pandas
 
@@ -30,6 +31,7 @@ def parse_argument():
     parser.add_argument('-d', '--dir', dest = 'dir', type = str, required = False, default = '.', help = "Output directory")
     parser.add_argument('-r', '--ref', dest = 'ref', type = str, required = True, help = "Name of the reference sequence in the alignment")
     parser.add_argument('-l', '--list', dest = 'list', action = 'store_true', help = "Create a list of alterations in a conventional format (e.g., W25N)")
+    parser.add_argument('-v', '--var', dest = 'var', action = 'store_true', help = "Create a FASTA-format alignment file of variable sites only")
     return parser.parse_args()
 
 
@@ -37,16 +39,23 @@ def main():
     args = parse_argument()
     aln = import_alignment(args.input)  # aln = {sequence ID : sequence}
     ref_name = args.ref
-    ref, ref_gap_free = validate_params(ref_name, aln, args.dir)  # The script exists when this validation fails.
-    print("Info: Length of the reference sequence: %i" % (len(ref) - ref.count('-')), file = sys.stderr)  # The sequence length does not count the size of gaps.
+    ref, ref_gap_free, n = validate_params(ref_name, aln, args.dir)  # The script exists when this validation fails. n: alignment length (including gap characters, and must be the same across sequences).
+    print("Info: Length of the reference sequence: %i" % (n - ref.count('-')), file = sys.stderr)  # The sequence length does not count the size of gaps.
     aln = {key : value for key, value in aln.items() if key != ref_name}  # Take a subset of the dictionary aln
-    vcf = aln2vcf(ref, aln)  # Create a VCF-like table (pandas data frame) of six columns: Sample, Pos, Ref, Alt, Type (of mutation), Aux_pos
-    vcf.to_csv(os.path.join(args.dir, args.output + '_var.tsv'), index = False, sep = '\t')  # This table can be read into Python using pandas.read_csv('XXXX.vcf', sep = '\t').
+    vcf, var_sites = aln2vcf(ref, aln, n)  # Create a VCF-like table (pandas data frame) of six columns: Sample, Pos, Ref, Alt, Type (of mutation), Aux_pos
+    vcf.to_csv(os.path.join(args.dir, args.output + '_vcf.tsv'), index = False, sep = '\t')  # This table can be read into Python using pandas.read_csv('XXXX_vcf.tsv', sep = '\t').
     mat, vcf_samples = vcf2mat(vcf, ref_gap_free, ref_name, list(aln.keys()))  # Convert a VCF data frame into a matrix of alterations (sample x variant positions) that can be aligned to a phylogenetic tree
     mat.to_csv(os.path.join(args.dir, args.output + '_mat.tsv'), index = False, sep = '\t')
     if args.list:
         lst = vcf2lst(vcf, vcf_samples)
         lst.to_csv(os.path.join(args.dir, args.output + '_lst.tsv'), index = False, sep = '\t')
+    if args.var and var_sites != None:
+        aln[ref_name] = ref
+        aln_var = extract_var_sites(var_sites, aln)
+        with open(os.path.join(args.dir, args.output + '_var.aln'), 'w') as fasta:
+            for sam, seq in aln_var.items():
+                fasta.write('>' + sam + '\n')
+                fasta.write(seq + '\n')
     return
 
 
@@ -86,13 +95,19 @@ def validate_params(ref_name, aln, outdir):
         ref_gap_free = ref_seq.replace('-', '')  # Otherwise, the coordinates in function get_ref_row do not match those in the reference sequence.
         if ref_gap_free == '':
             msg = "Error: the reference sequence cannot be a gap (namely, consisting of only dash characters)."
+    seq_len = list()  # Check sequence lengths
+    for s in aln.values():
+        seq_len.append(len(s))
+    n = max(seq_len)
+    if min(seq_len) != n:
+        msg = "Error: sequences (including gaps) in the alignment must have the same length."
     if msg != None:
         print(msg, file = sys.stderr)
         sys.exit(1)
-    return ref_seq, ref_gap_free
+    return ref_seq, ref_gap_free, n
 
 
-def aln2vcf(ref, aln):
+def aln2vcf(ref, aln, n):
     """
     Mutation calling: to create a VCF-like table of five columns: Sample, Pos, Ref, Alt, Type (of mutation)
     Code for alteration types: S (substitution), I (insertion to the reference), D (deletion from the reference)
@@ -104,12 +119,13 @@ def aln2vcf(ref, aln):
     refs = list()  # Bases/amino acids (AAs) in the reference sequence
     alts = list()  # Alternative bases/AAs in the sample sequence
     types = list()  # Types of alterations
+    var_sites = set()  # Indices of variable sites across samples in the input alignment
     for sam, seq in aln.items():  # Of note, a sample does not appear in the VCF if it is identical to the reference.
         p = 0  # A pointer for the current character in the reference sequence, excluding '-' characters. (real position - 1)
         ins = False  # A flag for whether the current position is in an insertion ('-' characters in the reference sequence)
         ins_up = 0  # Immediately upstream position of an insertion; Variables ins_up and p mark the flanking positions of the current insertion.
         ins_seq = ''  # The inserted sequence
-        for i in range(0, len(ref)):  # Python character indexes across sequences in the alignment, including '-' characters. In the alignment file, every sequence (including '-') must have the same length.
+        for i in range(0, n):  # Python character indexes across sequences in the alignment, including '-' characters. In the alignment file, every sequence (including '-') must have the same length.
             r = ref[i]  # Reference base/AA
             s = seq[i]  # Sample base/AA
             if r == s:
@@ -128,6 +144,7 @@ def aln2vcf(ref, aln):
                         ins = False
                         ins_seq = ''
             else:  # Record an alteration. Note that in a multisequence alignment, r and s may both be '-'.
+                var_sites.add(i)
                 if r != '-':  # The alteration is a deletion, a substitution, or the end of an insertion.
                     samples.append(sam)
                     p += 1
@@ -161,7 +178,14 @@ def aln2vcf(ref, aln):
             types.append('I')
             ins = False
             ins_seq = ''
-    return pandas.DataFrame({'Sample' : samples, 'Pos' : coords, 'Ref' : refs, 'Alt' : alts, 'Type' : types, 'Aux_pos' : aux_coords})
+    vcf = pandas.DataFrame({'Sample' : samples, 'Pos' : coords, 'Ref' : refs, 'Alt' : alts, 'Type' : types, 'Aux_pos' : aux_coords})
+    if len(var_sites) > 0:
+        var_sites = list(var_sites)
+        var_sites.sort()
+    else:
+        print("Info: every sequence in the alignment is the same.", file = sys.stderr)
+        var_sites = None
+    return vcf, var_sites
 
 
 def vcf2mat(vcf, ref_gap_free, ref_name, all_samples):
@@ -226,6 +250,17 @@ def vcf2lst(vcf, vcf_samples):
                 alt.append(row['Ref'] + row['Pos'] + 'del')  # E.g. R80del. Users may want to manually merge consecutive deletions into a single one.
         lst = lst.append(pandas.Series([sam, ','.join(alt)], index = lst.columns), ignore_index = True)  # Sample name'\t'A comma-delimited list of alterations
     return lst
+
+
+def extract_var_sites(var_sites, aln):
+    """ Remove invariable sites from the input alignment, assuming the pre-sorted list var_sites != None. """
+    aln_var = dict()
+    for sam, seq in aln.items():
+        s = ''
+        for i in var_sites:
+            s += seq[i]
+        aln_var[sam] = s
+    return aln_var
 
 
 if __name__ == '__main__':

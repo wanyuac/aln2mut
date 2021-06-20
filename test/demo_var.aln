@@ -1,0 +1,12 @@
+>sample_1
+------T------ATGGA---
+>sample_2
+ATAATGC------ATGAA---
+>sample_3
+---ATGCGATCCCATAGA---
+>sample_4
+---ATGC---CTGACAGA---
+>sample_5
+---ATGC--------AGGTAG
+>reference
+---ATGC------ATAGA---

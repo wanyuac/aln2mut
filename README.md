@@ -7,7 +7,7 @@ Development environment: Python v3.8.5, pandas v1.2.4.
 ## Demonstration
 
 ```bash
-python aln2mut.py -i test/demo.aln -o demo -d test -r reference -l
+python aln2mut.py -i test/demo.aln -o demo -d test -r reference -l -v
 ```
 
 Length of the reference sequence: 21 aa.
