@@ -1,8 +1,8 @@
 # Identifying mutations from FASTA-format sequence alignments
 
+Note (8 June 2025): this script has been incorporated as a module of [rasti](https://github.com/wanyuac/rasti). Please refer to the latter for updates.
+
 Development environment: Python v3.8.5, pandas v1.2.4.
-
-
 
 ## Demonstration
 
@@ -11,8 +11,6 @@ python aln2mut.py -i test/demo.aln -o demo -d test -r reference -l -v
 ```
 
 Length of the reference sequence: 21 aa.
-
-
 
 ## Output
 
