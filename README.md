@@ -1,6 +1,6 @@
 # Identifying mutations from FASTA-format sequence alignments
 
-Note (8 June 2025): this script has been incorporated as a module of [rasti](https://github.com/wanyuac/rasti). Please refer to the latter for updates.
+Note (8 June 2025): this script has been incorporated into [rasti](https://github.com/wanyuac/rasti) as a module. Please refer to script [Alignment.py](https://github.com/wanyuac/rasti/blob/main/module/Alignment.py) of rasti for updates.
 
 Development environment: Python v3.8.5, pandas v1.2.4.
 
